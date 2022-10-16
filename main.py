@@ -28,6 +28,7 @@ if __name__ == "__main__":
     sessionid = usernames_list[SESSION_USER].get("sessionid", None)
     if sessionid is None:
         raise Exception("Invalid Session ID provided")
+    sessionid = unquote_sid(sessionid)
 
     instagram = InstagramDownloader(sessionid)
 

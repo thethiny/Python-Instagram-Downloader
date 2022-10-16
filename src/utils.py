@@ -3,6 +3,7 @@ import os
 import shutil
 import requests
 from datetime import datetime
+from urllib.parse import unquote_plus
 
 PROTOCOL_RE = re.compile(r"^(https?)://")
 def url_join(*urls: str, domain=""):
@@ -64,3 +65,8 @@ def disable_proxy(*domain):
 
 def get_time_now_as_hour():
     return datetime.utcnow().strftime(r"%d-%m-%y_%H")
+
+def unquote_sid(sid):
+    if "%" in sid:
+        return unquote_plus(sid)
+    return sid
