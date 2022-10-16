@@ -1,9 +1,13 @@
 import json
+import os
 from typing import Iterable, List
-from src.consts import FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API, STORY_API, USER_ID_API
+
 import requests
 
-from src.parsers import ParsedItemType, ReelItemType, UserType
+from src.consts import (FEED_API, IG_HEADERS, MEDIA_PATH, PROFILE_INFO_GRAPH_API,
+                        STORY_API, USER_ID_API)
+from src.validators import ParsedItemType, ReelItemType, UserType
+from src.utils import get_extension_from_url, download_item
 
 
 class InstagramDownloader:
@@ -155,5 +159,45 @@ class InstagramDownloader:
             post_items.append(post_item)
         
         return post_items
+
+    def download_list(self, downloads_list: List[ParsedItemType], mappings, folder):
+        all_exist = True
+        for i, item in enumerate(downloads_list):
+            parent_id = item["parent"]
+            id_ = item["id"]
+            if parent_id:
+                image_name = video_name = f"{parent_id}_{id_}"
+            else:
+                image_name = video_name = id_
+            try:
+                owner = mappings[str(item["owner"])]
+            except KeyError:
+                print("Uknown Owner", item["owner"])
+                owner = os.path.join("Unknown", str(item["owner"]))
+            print(f"Downloading item {id_} for {owner} ({i+1}/{len(downloads_list)})", end="\r")
+            image = item["image_url"]
+            video = item["video_url"]
+            besties = item["besties_only"]
+            image_ext = get_extension_from_url(image)
+            video_ext = get_extension_from_url(video)
+            path = os.path.join(MEDIA_PATH, owner, folder)
+            os.makedirs(path, exist_ok=True)
+            if besties:
+                path = os.path.join(path, "private")
+
+            thumbnails_path = os.path.join(path, "video_thumbnails")
+            os.makedirs(thumbnails_path,exist_ok=True)
+
+            if video:
+                image_name = os.path.join("video_thumbnails", image_name + "_thumbnail")
+                video_file = os.path.join(path, f"{video_name}.{video_ext}")
+                if download_item(video, video_file):
+                    all_exist = False
+            
+            image_file = os.path.join(path, f"{image_name}.{image_ext}")
+            if download_item(image, image_file):
+                all_exist = False
+        print()
+        return all_exist
 
             

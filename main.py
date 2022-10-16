@@ -2,11 +2,12 @@ import json
 import os
 import sys
 from math import ceil
+from typing import Any
 
 from src.api import InstagramDownloader
 
    
-from src.parsers import *
+from src.validators import *
 from src.consts import *
 from src.utils import *
         
@@ -19,7 +20,7 @@ if __name__ == "__main__":
 
     try:
         with open("data/list.json", "r") as f:
-            usernames_list = json.load(f)
+            usernames_list: Dict[str, ListObjectType] = json.load(f)
     except Exception:
         print("Failed to load data/list.json")
         exit(1)
@@ -82,7 +83,7 @@ if __name__ == "__main__":
             with open(story_file, "w", encoding='utf-8') as f:
                 json.dump(story_data, f, ensure_ascii=False, indent=4)
 
-            download_list(story_data, username_mappings, "stories")
+            instagram.download_list(story_data, username_mappings, "stories")
 
     for user_id, username in username_mappings.items():
         print("Getting posts for", username, user_id)
@@ -100,7 +101,7 @@ if __name__ == "__main__":
         full_posts = []
         for posts in instagram.parse_posts_data(posts_data):
             full_posts.extend(posts)
-        download_list(full_posts, username_mappings, posts_folder)
+        instagram.download_list(full_posts, username_mappings, posts_folder)
 
 
         with open(posts_file, "w", encoding='utf-8') as f:
@@ -123,7 +124,7 @@ if __name__ == "__main__":
                 highlights_folder = os.path.join("highlights", h_id)
                 highlights_folder_full_path = os.path.join(MEDIA_PATH, username, highlights_folder)
                 print(f"Getting highlight {h_id} ({j+1}/{LIMIT})")
-                download_list(highlights_data[h_id]["reels"], username_mappings, highlights_folder)
+                instagram.download_list(highlights_data[h_id]["reels"], username_mappings, highlights_folder)
 
                 print("Saving name and thumbnail")
                 thumb_url = highlights_data[h_id]["thumbnail_url"]
