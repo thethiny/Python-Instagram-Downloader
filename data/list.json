@@ -1,0 +1,10 @@
+{
+    "TEST": {
+        "sessionid": "<YOUR SESSION ID>",
+        "users": [
+            "user1",
+            "user2",
+            "..."
+        ]
+    }
+}
