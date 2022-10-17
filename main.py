@@ -34,7 +34,10 @@ def parse_args(*args):
 
     parser.add_argument("--allow-proxy", "-x", dest="bypass_proxy", action="store_false", help="Allow usage of os proxy. If off (default) then python will bypass proxy.")
 
-    return parser.parse_args(args)
+    if args:
+        return parser.parse_args(args)
+    else:
+        return parser.parse_args()
 
 if __name__ == "__main__":
 
