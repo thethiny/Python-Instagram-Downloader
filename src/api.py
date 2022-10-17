@@ -4,10 +4,10 @@ from typing import Iterable, List
 
 import requests
 
-from src.consts import (FEED_API, IG_HEADERS, MEDIA_PATH, PROFILE_INFO_GRAPH_API,
+from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API,
                         STORY_API, USER_ID_API)
+from src.utils import download_item, get_extension_from_url
 from src.validators import ParsedItemType, ReelItemType, UserType
-from src.utils import get_extension_from_url, download_item
 
 
 class InstagramDownloader:
@@ -160,7 +160,7 @@ class InstagramDownloader:
         
         return post_items
 
-    def download_list(self, downloads_list: List[ParsedItemType], mappings, folder):
+    def download_list(self, downloads_list: List[ParsedItemType], mappings, folder, download_path):
         all_exist = True
         for i, item in enumerate(downloads_list):
             parent_id = item["parent"]
@@ -180,7 +180,7 @@ class InstagramDownloader:
             besties = item["besties_only"]
             image_ext = get_extension_from_url(image)
             video_ext = get_extension_from_url(video)
-            path = os.path.join(MEDIA_PATH, owner, folder)
+            path = os.path.join(download_path, owner, folder)
             os.makedirs(path, exist_ok=True)
             if besties:
                 path = os.path.join(path, "private")

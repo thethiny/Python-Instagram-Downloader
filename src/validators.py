@@ -1,8 +1,5 @@
-import os
 from typing import Dict, List, Literal, Optional, TypedDict
-from src.consts import MEDIA_PATH
 
-from src.utils import download_item, get_extension_from_url
 
 class ParsedItemType(TypedDict):
     id: str

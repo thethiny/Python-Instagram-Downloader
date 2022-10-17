@@ -1,9 +1,10 @@
-import re
 import os
+import re
 import shutil
-import requests
 from datetime import datetime
 from urllib.parse import unquote_plus
+
+import requests
 
 PROTOCOL_RE = re.compile(r"^(https?)://")
 def url_join(*urls: str, domain=""):
