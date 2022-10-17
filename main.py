@@ -38,7 +38,7 @@ def parse_args(*args):
 
 if __name__ == "__main__":
 
-    args = parse_args("-I", "TT", "-l", "10")
+    args = parse_args()
     
     session_users: List[str] = args.users
     downloads_folder: str = args.download_path
