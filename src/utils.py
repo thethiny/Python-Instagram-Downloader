@@ -66,6 +66,9 @@ def disable_proxy(*domain):
 def get_time_now_as_hour():
     return datetime.utcnow().strftime(r"%d-%m-%y_%H")
 
+def get_time_now_as_day():
+    return datetime.utcnow().strftime(r"%d-%m-%y")
+
 def unquote_sid(sid):
     if "%" in sid:
         return unquote_plus(sid)
