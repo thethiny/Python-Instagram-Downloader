@@ -4,6 +4,12 @@ import shutil
 from datetime import datetime
 from urllib.parse import unquote_plus
 
+try:
+    import filedate
+except ModuleNotFoundError:
+    filedate = None
+
+
 import requests
 
 PROTOCOL_RE = re.compile(r"^(https?)://")
@@ -40,7 +46,26 @@ def url_join(*urls: str, domain=""):
 def get_extension_from_url(url):
     return url.split("?", 1)[0].rsplit(".", 1)[-1]
 
-def download_item(url: str, store_path: str):
+def timestamp_to_iso(timestamp: int):
+    time = datetime.fromtimestamp(timestamp)
+    time = time.isoformat()
+    return time
+
+def set_creation_time(file, time: int):
+    if filedate:
+        ts = timestamp_to_iso(time)
+        filedate.File(file).set(
+            created=ts,
+            modified=ts,
+            accessed=ts,
+        )
+    else:
+        os.utime(file, times=(time,)*2)
+
+def download_item(url: str, store_path: str, timestamp: int = 0, retry_count: int = 0):
+    if retry_count > 3:
+        print("Retry Count Exceeded for", url)
+        return False
     if os.path.exists(store_path):
         print("Already exists", store_path, end="\r")
         return False
@@ -49,10 +74,15 @@ def download_item(url: str, store_path: str):
         if context.status_code == 410:
             print("Cannot download", url, "for error 410")
             return False
+        if context.status_code // 100 == 5:
+            print("Server error on", url, context.status_code)
+            return download_item(url, store_path, timestamp, retry_count+1)
         
         context.raise_for_status()
         with open(store_path, "wb") as f:
             shutil.copyfileobj(context.raw, f)
+        if timestamp > 0:
+            set_creation_time(store_path, timestamp)
     
     return True
 
