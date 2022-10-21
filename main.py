@@ -10,6 +10,7 @@ from src.utils import (
     disable_proxy,
     download_item,
     get_extension_from_url,
+    get_file_name_from_url,
     get_time_now_as_day,
     get_time_now_as_hour,
     unquote_sid,
@@ -230,15 +231,16 @@ if __name__ == "__main__":
 
         for username in usernames:
             # Add something to refresh profile pic if pic isn't today
+            pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
+            pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
+            os.makedirs(pro_pic_path, exist_ok=True)
             if username in username_mappings.values():
                 time_str = get_time_now_as_day()
-                pro_pic_path = os.path.join(
-                    downloads_folder, username, "profile_pics", time_str
-                )
-                if os.path.exists(pro_pic_path + ".jpg"):
-                    continue
-                if os.path.exists(pro_pic_path + ".webp"):
-                    continue
+                if os.path.exists(pro_pic_file_path):
+                    with open(pro_pic_file_path) as f:
+                        last_date = f.read().strip()
+                        if last_date == time_str:
+                            continue
                 print("Profile pic expired, getting a new one.")
             print("Getting user id of", username)
             user = instagram.get_user_profile(username)
@@ -247,13 +249,15 @@ if __name__ == "__main__":
             username_mappings[user_id] = username
             all_usernames[user_id] = username
 
-            pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
-            os.makedirs(pro_pic_path, exist_ok=True)
+            
+            pro_pic_file = get_file_name_from_url(profile_pic)
             pro_pic_path = os.path.join(
                 pro_pic_path,
-                get_time_now_as_day() + "." + get_extension_from_url(profile_pic),
+                pro_pic_file,
             )
             download_item(profile_pic, pro_pic_path)
+            with open(pro_pic_file_path, "w") as f:
+                f.write(get_time_now_as_day())
 
         with open(usernames_path, "w", encoding="utf-8") as f:
             json.dump(all_usernames, f, indent=4, ensure_ascii=False)
