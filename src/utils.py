@@ -46,6 +46,9 @@ def url_join(*urls: str, domain=""):
 def get_extension_from_url(url):
     return url.split("?", 1)[0].rsplit(".", 1)[-1]
 
+def get_file_name_from_url(url):
+    return url.strip("/").split("?", 1)[0].rsplit("/", 1)[-1]
+
 def timestamp_to_iso(timestamp: int):
     time = datetime.fromtimestamp(timestamp)
     time = time.isoformat()
