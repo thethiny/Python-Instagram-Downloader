@@ -19,8 +19,10 @@ class InstagramDownloader:
         self.session = requests.Session()
         self.session.cookies.set("sessionid", sessionid, domain=".instagram.com", path="/")
 
-    def _get_request(self, url):
-        return self.session.get(url, headers=IG_HEADERS)
+    def _get_request(self, url, timeout: float = 0):
+        if not timeout:
+            return self.session.get(url, headers=IG_HEADERS)
+        return self.session.get(url, headers=IG_HEADERS, timeout=timeout)
 
     def get_user_profile(self, username: str):
         r = self._get_request(USER_ID_API.format(username=username))
