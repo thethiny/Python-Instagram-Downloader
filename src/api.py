@@ -25,7 +25,7 @@ class InstagramDownloader:
         return self.session.get(url, headers=IG_HEADERS, timeout=timeout)
 
     def get_user_profile(self, username: str):
-        r = self._get_request(USER_ID_API.format(username=username), timeout=5000)
+        r = self._get_request(USER_ID_API.format(username=username), timeout=5)
         user: UserType = r.json()["data"]["user"]
         return user
 
