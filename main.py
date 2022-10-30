@@ -247,7 +247,6 @@ if __name__ == "__main__":
                         username_mappings[u_id] = u_name
 
         for username in usernames:
-            sleep(sleep_duration)
             # Add something to refresh profile pic if pic isn't today
             pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
             pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
@@ -260,6 +259,7 @@ if __name__ == "__main__":
                         if last_date == time_str:
                             continue
                 print("Profile pic expired, getting a new one.")
+            sleep(sleep_duration) # Sleep after checking local and not before
             print("Getting user id of", username)
             user = instagram.get_user_profile(username)
             user_id = user["id"]
