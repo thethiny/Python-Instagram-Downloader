@@ -2,6 +2,7 @@ import json
 import os
 from argparse import ArgumentParser
 from math import ceil
+from time import sleep
 from typing import Dict, List
 
 from src.api import InstagramDownloader
@@ -16,6 +17,7 @@ from src.utils import (
     unquote_sid,
 )
 from src.validators import ListObjectType, ListUserType
+
 
 def parse_args(*args):
     parser = ArgumentParser("InstagramDownloader")
@@ -53,7 +55,11 @@ def parse_args(*args):
         default=os.path.join("data", "list.json"),
     )
     input_group.add_argument(
-        "--all-categories", "-a", dest="all_users", action="store_true", help="Automatically goes through all the categories"
+        "--all-categories",
+        "-a",
+        dest="all_users",
+        action="store_true",
+        help="Automatically goes through all the categories",
     )
     input_group.add_argument(
         "--session-id", "-e", type=str, help="Your session id to login as.", default=""
@@ -121,12 +127,21 @@ def parse_args(*args):
         help="Download Highlights only",
     )
 
-    parser.add_argument(
+    options_group = parser.add_argument_group("Options")
+    options_group.add_argument(
         "--allow-proxy",
         "-x",
         dest="bypass_proxy",
         action="store_false",
         help="Allow usage of os proxy. If off (default) then python will bypass proxy.",
+    )
+    options_group.add_argument(
+        "--sleep-time",
+        "-t",
+        dest="sleep_duration",
+        help="Time to wait in between requests in seconds",
+        metavar="SECONDS",
+        default=1,
     )
 
     if args:
@@ -153,6 +168,7 @@ if __name__ == "__main__":
     dl_high: bool = args.dl_high
 
     bypass_proxy: bool = args.bypass_proxy
+    sleep_duration: int = args.sleep_duration
 
     if args.story_only:
         dl_story = args.dl_story = True
@@ -174,7 +190,9 @@ if __name__ == "__main__":
 
     if passed_session_id or passed_users:
         if all_users:
-            raise ValueError("When Input File is not specified, All Users flag cannot be used.")
+            raise ValueError(
+                "When Input File is not specified, All Users flag cannot be used."
+            )
         if not passed_session_id or not passed_users:
             raise ValueError(
                 "When Input File is not specified, both session id and users must be passed."
@@ -199,7 +217,6 @@ if __name__ == "__main__":
                     args.users = session_users = list(usernames_list.keys())
         except Exception:
             raise Exception("Failed to load data/list.json")
-
 
     for session_user in session_users:
 
@@ -230,6 +247,7 @@ if __name__ == "__main__":
                         username_mappings[u_id] = u_name
 
         for username in usernames:
+            sleep(sleep_duration)
             # Add something to refresh profile pic if pic isn't today
             pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
             pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
@@ -249,7 +267,6 @@ if __name__ == "__main__":
             username_mappings[user_id] = username
             all_usernames[user_id] = username
 
-            
             pro_pic_file = get_file_name_from_url(profile_pic)
             pro_pic_path = os.path.join(
                 pro_pic_path,
@@ -265,6 +282,7 @@ if __name__ == "__main__":
         # Traverse stories 3 at a time
         users = list(username_mappings.keys())
         for i in range(0, len(usernames) if dl_story else 0, download_limit):
+            sleep(sleep_duration)
             cur_users = users[i : i + download_limit]
             cur_usernames = [username_mappings[uid] for uid in cur_users]
             print("Getting stories for", " ".join(cur_usernames))
@@ -287,6 +305,7 @@ if __name__ == "__main__":
                 )
 
         for user_id, username in username_mappings.items() if dl_posts else []:
+            sleep(sleep_duration)
             print("Getting posts for", username, user_id)
 
             posts_folder = os.path.join("posts")
@@ -310,10 +329,12 @@ if __name__ == "__main__":
                 json.dump(full_posts + old_posts, f, ensure_ascii=False, indent=4)
 
         for user_id, username in username_mappings.items() if dl_high else []:
+            sleep(sleep_duration)
             print("Getting highlights for", username, user_id)
             highlights_data, highlights_ids = instagram.get_highlights_data(user_id)
 
             for i in range(0, len(highlights_ids), download_limit):  # Walk 3 at a time
+                sleep(sleep_duration)
                 print(
                     f"Getting page {i//download_limit +1} / {ceil(len(highlights_ids)/download_limit)}"
                 )
