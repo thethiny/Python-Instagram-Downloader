@@ -44,6 +44,15 @@ class ReelItemType(TypedDict):
     taken_at: int # TimeStamp
     usertags: Dict[str, List[UserMediaTagType]]
 
+class ClipsPagingInfoType(TypedDict):
+    max_id: str
+    more_available: bool
+
+class ClipsItemType(TypedDict):
+    items: List[Dict[Literal["media"], ReelItemType]]
+    paging_info: ClipsPagingInfoType
+    status: str
+
 class ListUserType(TypedDict):
     sessionid: str
     users: List[str]

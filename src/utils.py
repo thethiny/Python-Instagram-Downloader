@@ -97,11 +97,17 @@ def disable_proxy(*domain):
     os.environ["NO_PROXY"] = ",".join([os.environ.get("NO_PROXY",""), domain]).strip(",")
     return
 
+def get_time_now():
+    return datetime.utcnow()
+
 def get_time_now_as_hour():
-    return datetime.utcnow().strftime(r"%d-%m-%y_%H")
+    return get_time_now().strftime(r"%d-%m-%y_%H")
 
 def get_time_now_as_day():
-    return datetime.utcnow().strftime(r"%d-%m-%y")
+    return get_time_now().strftime(r"%d-%m-%y")
+
+def get_time_now_as_week():
+    return get_time_now().strftime(r"%W")
 
 def unquote_sid(sid):
     if "%" in sid:

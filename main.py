@@ -14,6 +14,7 @@ from src.utils import (
     get_file_name_from_url,
     get_time_now_as_day,
     get_time_now_as_hour,
+    get_time_now_as_week,
     unquote_sid,
 )
 from src.validators import ListObjectType, ListUserType
@@ -93,6 +94,14 @@ def parse_args(*args):
         help="Disable downloading Posts if on",
     )
     save_group.add_argument(
+        "--disable-save-reels",
+        "--no-reels",
+        "-r",
+        dest="dl_reels",
+        action="store_false",
+        help="Disable downloading Reels if on",
+    )
+    save_group.add_argument(
         "--disable-save-highlights",
         "--no-highlights",
         "-i",
@@ -108,7 +117,7 @@ def parse_args(*args):
         "-S",
         dest="story_only",
         action="store_true",
-        help="Download stories only",
+        help="Download Stories only",
     )
     save_only_group.add_argument(
         "--save-posts-only",
@@ -116,7 +125,15 @@ def parse_args(*args):
         "-P",
         dest="posts_only",
         action="store_true",
-        help="Download posts only",
+        help="Download Posts only",
+    )
+    save_only_group.add_argument(
+        "--save-reels-only",
+        "--only-reels",
+        "-R",
+        dest="reels_only",
+        action="store_true",
+        help="Download Reels only",
     )
     save_only_group.add_argument(
         "--save-highlights-only",
@@ -143,6 +160,13 @@ def parse_args(*args):
         metavar="SECONDS",
         default=1,
     )
+    options_group.add_argument(
+        "--no-profile-pics",
+        "-n",
+        dest="profile_pic_download",
+        help="Disable downloading profile pics",
+        action="store_false",
+    )
 
     if args:
         return parser.parse_args(args)
@@ -165,23 +189,38 @@ if __name__ == "__main__":
 
     dl_story: bool = args.dl_story
     dl_posts: bool = args.dl_posts
+    dl_reels: bool = args.dl_reels
     dl_high: bool = args.dl_high
 
     bypass_proxy: bool = args.bypass_proxy
     sleep_duration: int = args.sleep_duration
+    profile_pic_download: bool = args.profile_pic_download
 
     if args.story_only:
         dl_story = args.dl_story = True
         dl_posts = args.dl_posts = False
+        dl_reels = args.dl_reels = False
         dl_high = args.dl_high = False
     elif args.posts_only:
         dl_story = args.dl_story = False
         dl_posts = args.dl_posts = True
+        dl_reels = args.dl_reels = False
+        dl_high = args.dl_high = False
+    elif args.reels_only:
+        dl_story = args.dl_story = False
+        dl_posts = args.dl_posts = False
+        dl_reels = args.dl_reels = True
         dl_high = args.dl_high = False
     elif args.high_only:
         dl_story = args.dl_story = False
         dl_posts = args.dl_posts = False
+        dl_reels = args.dl_reels = False
         dl_high = args.dl_high = True
+
+    if dl_reels:
+        print("Reels downloading is disable since it's triggering instagram bot detection")
+        exit(2)
+    dl_reels = False # Turn it off since it's causing issues with csrftoken logging out instagram
 
     if bypass_proxy:
         disable_proxy("instagram.com")
@@ -246,13 +285,16 @@ if __name__ == "__main__":
                     if u_name in usernames:
                         username_mappings[u_id] = u_name
 
+        time_str = get_time_now_as_week()
+
         for username in usernames:
             # Add something to refresh profile pic if pic isn't today
             pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
             pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
             os.makedirs(pro_pic_path, exist_ok=True)
             if username in username_mappings.values():
-                time_str = get_time_now_as_day()
+                if not profile_pic_download:
+                    continue
                 if os.path.exists(pro_pic_file_path):
                     with open(pro_pic_file_path) as f:
                         last_date = f.read().strip()
@@ -274,7 +316,7 @@ if __name__ == "__main__":
             )
             download_item(profile_pic, pro_pic_path)
             with open(pro_pic_file_path, "w") as f:
-                f.write(get_time_now_as_day())
+                f.write(time_str)
 
         with open(usernames_path, "w", encoding="utf-8") as f:
             json.dump(all_usernames, f, indent=4, ensure_ascii=False)
@@ -287,9 +329,9 @@ if __name__ == "__main__":
             cur_usernames = [username_mappings[uid] for uid in cur_users]
             print("Getting stories for", " ".join(cur_usernames))
 
-            data = instagram.get_reels_data(cur_users)
+            data = instagram.get_story_reels_data(cur_users)
 
-            for story_data, user_id in instagram.parse_reels_data(
+            for story_data, user_id in instagram.parse_story_reels_data(
                 data, username_mappings
             ):
                 username = username_mappings[str(user_id)]
@@ -328,6 +370,30 @@ if __name__ == "__main__":
             with open(posts_file, "w", encoding="utf-8") as f:
                 json.dump(full_posts + old_posts, f, ensure_ascii=False, indent=4)
 
+        for user_id, username in username_mappings.items() if dl_reels else []:
+            sleep(sleep_duration)
+            print("Getting reels for", username, user_id)
+
+            reels_folder = os.path.join("reels")
+            reels_meta_path = os.path.join(downloads_folder, username, "meta")
+            reels_file = os.path.join(reels_meta_path, "reels.json")
+            if os.path.exists(reels_file):
+                with open(reels_file, encoding="utf-8") as f:
+                    old_reels = json.load(f)
+            else:
+                old_reels = []
+            
+            reels_data = list(instagram.get_reels_data(user_id, old_reels))
+            full_reels = []
+            for reels in instagram.parse_posts_data(reels_data):
+                full_reels.extend(reels)
+            instagram.download_list(
+                full_reels, username_mappings, reels_folder, downloads_folder
+            )
+
+            with open(reels_file, "w", encoding="utf-8") as f:
+                json.dump(full_reels + old_reels, f, ensure_ascii=False, indent=4)
+
         for user_id, username in username_mappings.items() if dl_high else []:
             sleep(sleep_duration)
             print("Getting highlights for", username, user_id)
@@ -339,7 +405,7 @@ if __name__ == "__main__":
                     f"Getting page {i//download_limit +1} / {ceil(len(highlights_ids)/download_limit)}"
                 )
                 cur_h = highlights_ids[i : i + download_limit]
-                data = instagram.get_reels_data(cur_h)
+                data = instagram.get_story_reels_data(cur_h)
 
                 for j, highlight in enumerate(data["reels"].values()):
                     h_id = highlight["id"].split(":", 1)[-1]

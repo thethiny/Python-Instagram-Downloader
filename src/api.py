@@ -5,10 +5,10 @@ from typing import Dict, Iterable, List, Optional
 
 import requests
 
-from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API,
+from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API, REELS_API,
                         STORY_API, USER_ID_API)
 from src.utils import download_item, get_extension_from_url, set_creation_time
-from src.validators import ParsedItemType, ParsedTagUserType, ReelItemType, UserMediaTagType, UserType
+from src.validators import ClipsItemType, ParsedItemType, ParsedTagUserType, ReelItemType, UserMediaTagType, UserType
 
 
 class InstagramDownloader:
@@ -19,22 +19,46 @@ class InstagramDownloader:
         self.session = requests.Session()
         self.session.cookies.set("sessionid", sessionid, domain=".instagram.com", path="/")
 
-    def _get_request(self, url, timeout: float = 0):
+    def _get_csrf_token(self, url: str = ""):
+        for _ in range(10): # Max 10 attempts to get csrftoken
+            if not self.session.cookies.get("csrftoken"):
+                self.session.get(url or "https://instagram.com/")
+            token = self.session.cookies.get("csrftoken")
+            if token:
+                return token
+        raise Exception("Time out while getting csrftoken")
+
+    def _get_request(self, url, timeout: float = 0, override_header: Optional[dict] = {}, auth: bool = True):
+        headers = override_header or IG_HEADERS
+        # requestor = self.session if auth else requests # Instagram not allowing, need to figure out reason
+        requestor = self.session
         if not timeout:
-            return self.session.get(url, headers=IG_HEADERS)
-        return self.session.get(url, headers=IG_HEADERS, timeout=timeout)
+            return requestor.get(url, headers=headers)
+        return requestor.get(url, headers=headers, timeout=timeout)
+    
+    def _post_request(self, url, body: Iterable, timeout: float = 0, override_header: Optional[dict] = {}, auth: bool = True):
+        headers = override_header or IG_HEADERS
+        more_headers = {
+            "x-csrftoken": self._get_csrf_token(url),
+            "content-type": "application/x-www-form-urlencoded"
+        }
+        headers={**headers, **more_headers}
+        requestor = self.session
+        if not timeout:
+            return requestor.post(url, headers=headers, data=body)
+        return requestor.post(url, headers=headers, data=body, timeout=timeout)
 
     def get_user_profile(self, username: str):
-        r = self._get_request(USER_ID_API.format(username=username), timeout=5)
+        r = self._get_request(USER_ID_API.format(username=username), timeout=5, auth=False)
         user: UserType = r.json()["data"]["user"]
         return user
 
-    def get_reels_data(self, reel_ids: Iterable[str]):
+    def get_story_reels_data(self, reel_ids: Iterable[str]):
         url = STORY_API.format(ids_string='&reel_ids='.join(reel_ids))
         r = self._get_request(url)
         return r.json()
 
-    def parse_reels_data(self, data, known_mappings):
+    def parse_story_reels_data(self, data, known_mappings):
         for reel in data["reels"].values():
             user_id = reel_id = reel["id"]
             username = known_mappings.get(str(user_id), "Unknown")
@@ -55,6 +79,48 @@ class InstagramDownloader:
 
     def get_all_posts_data(self, user_id):
         yield from self.get_posts_data(user_id, [])
+
+    def get_reels_data(self, user_id, old_posts = []):
+        next_id = ""
+        has_more = True
+        posts_count = 0
+
+        old_posts = {p["id"] for p in old_posts}
+
+        ctr = 1
+
+        while has_more:
+            print(f"Getting page {ctr} of reels", end = "")
+            body = {
+                "target_user_id": user_id,
+                "page_size": posts_count or 1,
+                "include_feed_video": True,
+                "max_id": next_id,
+            }
+            # url = REELS_API.format(**body)
+            url = REELS_API
+            r = self._post_request(url, body=body)
+            data: ClipsItemType = r.json()
+
+            paging_info = data.get("paging_info")
+            has_more = paging_info.get("more_available", False)
+            print(" with more to come" if has_more else "")
+
+            next_id = paging_info.get("max_id", "")
+            if not posts_count:
+                posts_count = 50
+
+            done = False
+            for item in data["items"]:
+                item = item["media"]
+                item_id = item["pk"]
+                if item_id in old_posts:
+                    done = True
+                    break
+                yield item
+            ctr += 1
+            if done:
+                break
 
     def get_posts_data(self, user_id, old_posts = []):
         next_id = ""
@@ -100,7 +166,7 @@ class InstagramDownloader:
             yield post_items
             
 
-    def get_highlights_data(self, user_id):
+    def get_highlights_data(self, user_id, needs_auth = True):
         variables = {
             "user_id": user_id,
             "include_chaining": False,
@@ -112,7 +178,7 @@ class InstagramDownloader:
         }
         string_vars = json.dumps(variables)
         url = PROFILE_INFO_GRAPH_API.format(variables=string_vars)
-        r = self._get_request(url)
+        r = self._get_request(url, auth=needs_auth) # Auth is when profile is private
         data = r.json()
 
         highlights_data = {
