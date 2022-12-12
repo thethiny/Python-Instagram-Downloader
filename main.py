@@ -98,7 +98,7 @@ def parse_args(*args):
         "--no-reels",
         "-r",
         dest="dl_reels",
-        action="store_false",
+        action="store_true", # Until I find a workaround this is store_true
         help="Disable downloading Reels if on",
     )
     save_group.add_argument(
@@ -227,15 +227,31 @@ if __name__ == "__main__":
 
     usernames_list: Dict[str, ListUserType]
 
+    def load_users_file(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                listobject: ListObjectType = json.load(f)
+                usernames_list = listobject.get("categories")
+                session_map = listobject.get("sessionids")
+        except Exception:
+            raise Exception(f"Failed to load list json: {file_path}")
+        return usernames_list, session_map
+        
+
     if passed_session_id or passed_users:
         if all_users:
-            raise ValueError(
-                "When Input File is not specified, All Users flag cannot be used."
-            )
+            raise ValueError("When Users are passed, All Users flag cannot be used.")
         if not passed_session_id or not passed_users:
-            raise ValueError(
-                "When Input File is not specified, both session id and users must be passed."
-            )
+            raise ValueError("Session Id and Users must be passed together.")
+        try:
+            usernames_list, session_map = load_users_file(input_file)
+            found_session_id = session_map.get(passed_session_id)
+            if found_session_id is not None:
+                print("Session Id treated as Key")
+                passed_session_id = found_session_id
+        except Exception:
+            pass
+        
         session_map = {
             "S": passed_session_id,
         }
@@ -247,15 +263,9 @@ if __name__ == "__main__":
         }
         args.users = session_users = ["passed"]
     else:
-        try:
-            with open(input_file, "r", encoding="utf-8") as f:
-                listobject: ListObjectType = json.load(f)
-                usernames_list = listobject.get("categories")
-                session_map = listobject.get("sessionids")
-                if all_users:
-                    args.users = session_users = list(usernames_list.keys())
-        except Exception:
-            raise Exception("Failed to load data/list.json")
+        usernames_list, session_map = load_users_file(input_file)
+        if all_users:
+            args.users = session_users = list(usernames_list.keys())
 
     for session_user in session_users:
 
