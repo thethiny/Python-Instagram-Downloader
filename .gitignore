@@ -3,3 +3,5 @@ data
 media
 __pycache__
 .pytest_cache
+todo.md
+*.bat

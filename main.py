@@ -10,12 +10,12 @@ from src.consts import LIMIT, MEDIA_PATH
 from src.utils import (
     disable_proxy,
     download_item,
+    download_profile_pic,
     get_extension_from_url,
-    get_file_name_from_url,
-    get_time_now_as_day,
     get_time_now_as_hour,
     get_time_now_as_week,
     unquote_sid,
+    verify_profile_pic,
 )
 from src.validators import ListObjectType, ListUserType
 
@@ -43,7 +43,7 @@ def parse_args(*args):
         "-l",
         dest="download_limit",
         type=int,
-        help="The number of calls to do per one call. Keep it at a low number to avoid huge payload, but not too low to avoid rate limiting. (Default 3)",
+        help=f"The number of calls to do per one call. Keep it at a low number to avoid huge payload, but not too low to avoid rate limiting. (Default {LIMIT})",
         default=LIMIT,
     )
 
@@ -284,9 +284,11 @@ if __name__ == "__main__":
 
         for username in usernames:
             os.makedirs(os.path.join(downloads_folder, username, "meta"), exist_ok=True)
+            os.makedirs(os.path.join(downloads_folder, username, "profile_pics"), exist_ok=True)
 
         username_mappings = {}
         all_usernames = {}
+        users_found = set()
         usernames_path = os.path.join(downloads_folder, "usernames.json")
         if os.path.exists(usernames_path):
             with open(usernames_path, "r", encoding="utf-8") as f:
@@ -294,53 +296,41 @@ if __name__ == "__main__":
                 for u_id, u_name in all_usernames.items():
                     if u_name in usernames:
                         username_mappings[u_id] = u_name
-
+                        users_found.add(u_name)
+                        
         time_str = get_time_now_as_week()
-
+        missing_profile_pic_ids = {}
+                        
         for username in usernames:
-            # Add something to refresh profile pic if pic isn't today
-            pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
-            pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
-            os.makedirs(pro_pic_path, exist_ok=True)
-            if username in username_mappings.values():
-                if not profile_pic_download:
-                    continue
-                if os.path.exists(pro_pic_file_path):
-                    with open(pro_pic_file_path) as f:
-                        last_date = f.read().strip()
-                        if last_date == time_str:
-                            continue
-                print("Profile pic expired, getting a new one.")
-            sleep(sleep_duration) # Sleep after checking local and not before
-            print("Getting user id of", username)
-            user = instagram.get_user_profile(username)
-            user_id = user["id"]
-            profile_pic = user.get("profile_pic_url_hd") or user["profile_pic_url"]
-            username_mappings[user_id] = username
-            all_usernames[user_id] = username
-
-            pro_pic_file = get_file_name_from_url(profile_pic)
-            pro_pic_path = os.path.join(
-                pro_pic_path,
-                pro_pic_file,
-            )
-            download_item(profile_pic, pro_pic_path)
-            with open(pro_pic_file_path, "w") as f:
-                f.write(time_str)
+            if username not in users_found:
+                print(f"New user {username} detected!")
+                user = instagram.get_user_profile(username)
+                profile_pic = user.get("profile_pic_url_hd") or user.get("profile_pic_url") or sd_url
+                user_id = user.get("id")
+                username_mappings[user_id] = username
+                all_usernames[user_id] = username
+                download_profile_pic(profile_pic, username, downloads_folder, time_str)
 
         with open(usernames_path, "w", encoding="utf-8") as f:
             json.dump(all_usernames, f, indent=4, ensure_ascii=False)
 
-        # Traverse stories 3 at a time
+        # Traverse stories LIMIT at a time
         users = list(username_mappings.keys())
-        for i in range(0, len(usernames) if dl_story else 0, download_limit):
+        for i in range(0, len(usernames) if dl_story else 0, download_limit*3):
             sleep(sleep_duration)
             cur_users = users[i : i + download_limit]
             cur_usernames = [username_mappings[uid] for uid in cur_users]
             print("Getting stories for", " ".join(cur_usernames))
 
             data = instagram.get_story_reels_data(cur_users)
-
+            missing_profile_pic_ids.update(
+                verify_profile_pic(
+                    data["reels"].values(),
+                    downloads_folder,
+                    missing_profile_pic_ids
+                )
+            )
+            
             for story_data, user_id in instagram.parse_story_reels_data(
                 data, username_mappings
             ):
@@ -370,6 +360,7 @@ if __name__ == "__main__":
                 old_posts = []
 
             posts_data = list(instagram.get_posts_data(user_id, old_posts))
+            missing_profile_pic_ids.update(verify_profile_pic(posts_data, downloads_folder, missing_profile_pic_ids, force=True)) # Force redownload all pics, it won't take much and it's just one time, and better safe than sorry, since this is already HD.
             full_posts = []
             for posts in instagram.parse_posts_data(posts_data):
                 full_posts.extend(posts)
@@ -457,3 +448,46 @@ if __name__ == "__main__":
             highlights_file = os.path.join(highlights_path, "highlights.json")
             with open(highlights_file, "w", encoding="utf-8") as f:
                 json.dump(highlights_data, f, ensure_ascii=False, indent=4)
+                
+        # Download profile pictures
+        if not profile_pic_download:
+            continue
+        
+        print("Validating profile pictures")
+        for username in usernames:
+            if username in missing_profile_pic_ids:
+                continue
+            pro_pic_path = os.path.join(downloads_folder, username, "profile_pics")
+            pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
+            os.makedirs(pro_pic_path, exist_ok=True)
+            if username in username_mappings.values():
+                if os.path.exists(pro_pic_file_path):
+                    with open(pro_pic_file_path) as f:
+                        last_date = f.read().strip()
+                        if last_date == time_str:
+                            continue
+                print(f"Profile pic expired for {username}, getting a new one.")
+                missing_profile_pic_ids[username] = {}
+        
+        for username, user_obj in missing_profile_pic_ids.items():
+            print(f"Profile pic for {username} expired. Getting a new one!")
+            sleep(sleep_duration)
+            user_id = user_obj.get("id")
+            sd_url = user_obj.get("sd_url")
+            hd_url = user_obj.get("hd_url")
+            hd_max_url = user_obj.get("hd_max_url")
+            force = False
+            if hd_max_url:
+                profile_pic = hd_max_url
+                force = True
+            elif hd_url:
+                profile_pic = hd_url
+            else:
+                user = instagram.get_user_profile(username)
+                profile_pic = user.get("profile_pic_url_hd") or user.get("profile_pic_url") or sd_url
+                user_id = user.get("id")
+            username_mappings[user_id] = username
+            all_usernames[user_id] = username
+            download_profile_pic(profile_pic, username, downloads_folder, time_str, force=force)
+        
+        
