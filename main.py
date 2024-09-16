@@ -436,13 +436,13 @@ if __name__ == "__main__":
                         downloads_folder,
                     )
 
-                    print("Saving name and thumbnail")
+                    print(f"Saving highlight {h_id} ({highlights_data[h_id]['title']}) metadata")
                     thumb_url = highlights_data[h_id]["thumbnail_url"]
                     thumb_path = os.path.join(
                         highlights_folder_full_path,
                         "thumbnail." + get_extension_from_url(thumb_url),
                     )
-                    download_item(thumb_url, thumb_path, desc="thumbnail")
+                    download_item(thumb_url, thumb_path, desc=f"Highlight {h_id} thumbnail")
                     print()
                     with open(
                         os.path.join(highlights_folder_full_path, "name.txt"),
