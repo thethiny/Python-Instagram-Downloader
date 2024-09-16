@@ -236,7 +236,6 @@ if __name__ == "__main__":
         except Exception:
             raise Exception(f"Failed to load list json: {file_path}")
         return usernames_list, session_map
-        
 
     if passed_session_id or passed_users:
         if all_users:
@@ -251,7 +250,7 @@ if __name__ == "__main__":
                 passed_session_id = found_session_id
         except Exception:
             pass
-        
+
         session_map = {
             "S": passed_session_id,
         }
@@ -297,28 +296,38 @@ if __name__ == "__main__":
                     if u_name in usernames:
                         username_mappings[u_id] = u_name
                         users_found.add(u_name)
-                        
+
         time_str = get_time_now_as_week()
         missing_profile_pic_ids = {}
-                        
+
+        us_rm = set()
         for username in usernames:
             if username not in users_found:
                 print(f"New user {username} detected!")
                 user = instagram.get_user_profile(username)
+                if user is None:
+                    print(f"User {username} does not existed or was deleted!")
+                    us_rm.add(username)
+                    continue
                 profile_pic = user.get("profile_pic_url_hd") or user.get("profile_pic_url") or sd_url
                 user_id = user.get("id")
                 username_mappings[user_id] = username
                 all_usernames[user_id] = username
                 download_profile_pic(profile_pic, username, downloads_folder, time_str)
 
+        if us_rm:
+            print(f"Removing a total of {len(us_rm)} deleted users!")
+        for user in us_rm:
+            usernames.remove(user)
+
         with open(usernames_path, "w", encoding="utf-8") as f:
             json.dump(all_usernames, f, indent=4, ensure_ascii=False)
 
-        # Traverse stories LIMIT at a time
+        # Traverse stories LIMIT*3 at a time
         users = list(username_mappings.keys())
         for i in range(0, len(usernames) if dl_story else 0, download_limit*3):
             sleep(sleep_duration)
-            cur_users = users[i : i + download_limit]
+            cur_users = users[i : i + download_limit*3]
             cur_usernames = [username_mappings[uid] for uid in cur_users]
             print("Getting stories for", " ".join(cur_usernames))
 
@@ -330,7 +339,7 @@ if __name__ == "__main__":
                     missing_profile_pic_ids
                 )
             )
-            
+
             for story_data, user_id in instagram.parse_story_reels_data(
                 data, username_mappings
             ):
@@ -383,7 +392,7 @@ if __name__ == "__main__":
                     old_reels = json.load(f)
             else:
                 old_reels = []
-            
+
             reels_data = list(instagram.get_reels_data(user_id, old_reels))
             full_reels = []
             for reels in instagram.parse_posts_data(reels_data):
@@ -433,7 +442,7 @@ if __name__ == "__main__":
                         highlights_folder_full_path,
                         "thumbnail." + get_extension_from_url(thumb_url),
                     )
-                    download_item(thumb_url, thumb_path)
+                    download_item(thumb_url, thumb_path, desc="thumbnail")
                     print()
                     with open(
                         os.path.join(highlights_folder_full_path, "name.txt"),
@@ -448,11 +457,11 @@ if __name__ == "__main__":
             highlights_file = os.path.join(highlights_path, "highlights.json")
             with open(highlights_file, "w", encoding="utf-8") as f:
                 json.dump(highlights_data, f, ensure_ascii=False, indent=4)
-                
+
         # Download profile pictures
         if not profile_pic_download:
             continue
-        
+
         print("Validating profile pictures")
         for username in usernames:
             if username in missing_profile_pic_ids:
@@ -468,7 +477,7 @@ if __name__ == "__main__":
                             continue
                 print(f"Profile pic expired for {username}, getting a new one.")
                 missing_profile_pic_ids[username] = {}
-        
+
         for username, user_obj in missing_profile_pic_ids.items():
             print(f"Profile pic for {username} expired. Getting a new one!")
             sleep(sleep_duration)
@@ -489,5 +498,3 @@ if __name__ == "__main__":
             username_mappings[user_id] = username
             all_usernames[user_id] = username
             download_profile_pic(profile_pic, username, downloads_folder, time_str, force=force)
-        
-        

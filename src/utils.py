@@ -4,6 +4,8 @@ import shutil
 from datetime import datetime
 from urllib.parse import unquote_plus
 
+from tqdm import tqdm
+
 try:
     import filedate
 except ModuleNotFoundError:
@@ -65,7 +67,8 @@ def set_creation_time(file, time: int):
     else:
         os.utime(file, times=(time,)*2) # type: ignore
 
-def download_item(url: str, store_path: str, timestamp: int = 0, retry_count: int = 0, force: bool = False):
+def download_item(url: str, store_path: str, timestamp: int = 0, retry_count: int = 0, force: bool = False, desc = None):
+    os.makedirs(os.path.dirname(store_path), exist_ok=True)
     if retry_count > 3:
         print("Retry Count Exceeded for", url)
         return False
@@ -79,16 +82,24 @@ def download_item(url: str, store_path: str, timestamp: int = 0, retry_count: in
             return False
         if context.status_code // 100 == 5:
             print("Server error on", url, context.status_code)
-            return download_item(url, store_path, timestamp, retry_count+1)
+            return download_item(url, store_path, timestamp, retry_count+1, desc=desc)
         if context.status_code == 404:
             print("Item deleted", url)
             return False
         
         context.raise_for_status()
+        
         if store_path == "memory":
             return context.raw
-        with open(store_path, "wb") as f:
-            shutil.copyfileobj(context.raw, f)
+        
+        total_size = int(context.headers.get("content-length", 0))
+        with open(store_path, "wb") as f, tqdm(total=total_size, unit='B', unit_scale=True, desc=desc) as pbar:
+            # shutil.copyfileobj(context.raw, f)
+            for chunk in context.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+            
         if timestamp > 0:
             set_creation_time(store_path, timestamp)
     
@@ -164,7 +175,7 @@ def download_profile_pic(pic_url, pic_user, downloads_folder, time_str, force: b
     pro_pic_file = get_file_name_from_url(pic_url)
     pro_pic_path = os.path.join(downloads_folder, pic_user, "profile_pics")
     pro_pic_file_path = os.path.join(pro_pic_path, pro_pic_file)
-    dl_ret = download_item(pic_url, pro_pic_file_path, force=force)
+    dl_ret = download_item(pic_url, pro_pic_file_path, force=force, desc=f"{pic_user} profile photo")
     pro_pic_file_path = os.path.join(pro_pic_path, "last.txt")
     with open(pro_pic_file_path, "w") as f:
         f.write(time_str)

@@ -4,6 +4,7 @@ import shutil
 from typing import Dict, Iterable, List, Optional
 
 import requests
+from tqdm import tqdm
 
 from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API, REELS_API,
                         STORY_API, USER_ID_API)
@@ -35,7 +36,7 @@ class InstagramDownloader:
         if not timeout:
             return requestor.get(url, headers=headers)
         return requestor.get(url, headers=headers, timeout=timeout)
-    
+
     def _post_request(self, url, body: Iterable, timeout: float = 0, override_header: Optional[dict] = {}, auth: bool = True):
         headers = override_header or IG_HEADERS
         more_headers = {
@@ -50,6 +51,8 @@ class InstagramDownloader:
 
     def get_user_profile(self, username: str):
         r = self._get_request(USER_ID_API.format(username=username), timeout=5, auth=False)
+        if r.status_code == 404:
+            return None
         user: UserType = r.json()["data"]["user"]
         return user
 
@@ -70,7 +73,7 @@ class InstagramDownloader:
             for item in items:
                 story_item = self.parse_reel_item(item)
                 story_data.append(story_item)
-            
+
             yield story_data, user_id
 
     def parse_highlights_data(self, data):
@@ -164,7 +167,6 @@ class InstagramDownloader:
             if not post_items:
                 continue
             yield post_items
-            
 
     def get_highlights_data(self, user_id, needs_auth = True):
         variables = {
@@ -192,8 +194,6 @@ class InstagramDownloader:
         highlights_ids = [f"highlight:{highlight_id}" for highlight_id in highlights_data.keys()]
 
         return highlights_data, highlights_ids
-
-
 
     def parse_reel_item(self, item: ReelItemType) -> ParsedItemType:
         item_id = item["pk"]
@@ -235,19 +235,19 @@ class InstagramDownloader:
     def parse_post_item(self, item) -> List[ParsedItemType]:    
         if "carousel_media" not in item:
             return [self.parse_reel_item(item)]
-        
+
         post_items: List[ParsedItemType] = []
         for carousel_item in item["carousel_media"]:
             carousel_item["user"] = item["user"]
             carousel_item["taken_at"] = item["taken_at"]
             post_item = self.parse_reel_item(carousel_item)
             post_items.append(post_item)
-        
+
         return post_items
 
     def download_list(self, downloads_list: List[ParsedItemType], mappings, folder, download_path):
         default_path = os.path.join(download_path, "{owner}", folder)
-        for i, item in enumerate(downloads_list):
+        for i, item in tqdm(enumerate(downloads_list), total=len(downloads_list), desc="Download List"):
             parent_id = item["parent"]
             id_ = item["id"]
             image_name = video_name = f"{parent_id}_{id_}" if parent_id else id_
@@ -258,7 +258,7 @@ class InstagramDownloader:
                 print("Possible Repost found", item["owner"])
                 # owner = os.path.join("Unknown", str(item["owner"]))
                 owner = item["owner_username"] or "Unknown"
-            print(f"Downloading item {id_} for {owner} ({i+1}/{len(downloads_list)})", end="\r")
+            tqdm_desc = f"Downloading {{}} {id_} for {owner}"
 
             image = item["image_url"]
             video = item["video_url"]
@@ -275,10 +275,10 @@ class InstagramDownloader:
                 os.makedirs(video_path, exist_ok=True)
                 image_name = image_name + "_thumbnail"
                 video_file = os.path.join(video_path, f"{video_name}.{video_ext}")
-                download_item(video, video_file, time)
+                download_item(video, video_file, time, desc=tqdm_desc.format("video"))
 
             image_file = os.path.join(image_path, f"{image_name}.{image_ext}")
-            download_item(image, image_file, time)
+            download_item(image, image_file, time, desc=tqdm_desc.format("image"))
 
             tagged_users = item["tagged_users"]
             if tagged_users:
@@ -293,7 +293,7 @@ class InstagramDownloader:
                     if video:
                         os.makedirs(vd_copy, exist_ok=True)
                         self._copy_item(video_file, os.path.join(vd_copy, f"{video_name}.{video_ext}"), time) # type: ignore
-                    
+
         print()
 
     def _copy_item(self, from_, to_, time):
@@ -310,11 +310,10 @@ class InstagramDownloader:
 
         if not user_name or user_name == "Unknown":
             return False
-        
+
         if os.path.exists(os.path.join(media_path, user_name, "meta")): # Needs to have meta
             return True
         return False
-        
 
     def _get_media_out_paths(self, default_path: str, is_private: bool, has_video: Optional[str], owner: str, is_tag: bool):
         path = default_path
@@ -330,7 +329,3 @@ class InstagramDownloader:
             video_path = ""
 
         return [s.format(owner=owner) for s in [image_path, video_path]]
-
-
-
-            
