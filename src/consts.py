@@ -2,13 +2,16 @@ from src.utils import url_join
 
 IG_APP_ID = "936619743392459"
 IG_HEADERS = {
-    "x-ig-app-id": IG_APP_ID
+    "x-ig-app-id": IG_APP_ID,
 }
 PROFILE_QUERY_HASH = "d4d88dc1500312af6f937f7b804c68c3"
+PROFILE_DOC_ID = "26762473490008061"
+POSTS_DOC_ID = "34579740524958711"
 
 INSTAGRAM_API_V1 = "https://instagram.com/api/v1/"
 INSTAGRAM_I_API_V1 = "https://i.instagram.com/api/v1/"
 INSTAGRAM_API_GRAPH = "https://instagram.com/graphql/"
+INSTAGRAM_API_V1_ROOT = "https://instagram.com/"
 INSTAGRAM_API_BASIC = ""
 
 # V1
@@ -17,8 +20,10 @@ USER_ID_API = url_join(INSTAGRAM_I_API_V1, "users/web_profile_info/?username={us
 STORY_HIGHLIGHTS_API = url_join(INSTAGRAM_I_API_V1, "highlights/{user_id}/highlights_tray")
 FEED_API = url_join(INSTAGRAM_I_API_V1, "feed/user/{user_id}/?count={count}&max_id={last_post_id}")
 REELS_API = url_join(INSTAGRAM_I_API_V1, "clips/user/") # target_user_id=id, page_size=size, include_feed_video=true, max_id=last_post_id
+SEARCH_USER_API = url_join(INSTAGRAM_API_V1_ROOT, "web", "search", "topsearch", "?query={username}")
 # Graph
 PROFILE_INFO_GRAPH_API = url_join(INSTAGRAM_API_GRAPH, "query", f"?query_hash={PROFILE_QUERY_HASH}&variables=""{variables}")
+PROFILE_INFO_GRAPH_API_DOCID = url_join(INSTAGRAM_API_GRAPH, "query", f"?doc_id={PROFILE_DOC_ID}&variables=""{variables}")
 
 MEDIA_PATH = "media"
 LIMIT = 3

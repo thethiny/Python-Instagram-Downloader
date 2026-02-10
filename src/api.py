@@ -1,12 +1,13 @@
 import json
 import os
 import shutil
+import time
 from typing import Dict, Iterable, List, Optional
 
 import requests
 from tqdm import tqdm
 
-from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API, REELS_API,
+from src.consts import (FEED_API, IG_HEADERS, PROFILE_INFO_GRAPH_API, PROFILE_INFO_GRAPH_API_DOCID, REELS_API, SEARCH_USER_API,
                         STORY_API, USER_ID_API)
 from src.utils import download_item, get_extension_from_url, set_creation_time
 from src.validators import ClipsItemType, ParsedItemType, ParsedTagUserType, ReelItemType, UserMediaTagType, UserType
@@ -50,11 +51,30 @@ class InstagramDownloader:
         return requestor.post(url, headers=headers, data=body, timeout=timeout)
 
     def get_user_profile(self, username: str):
-        r = self._get_request(USER_ID_API.format(username=username), timeout=5, auth=False)
+        url = SEARCH_USER_API.format(username=username)
+        r = self._get_request(url, timeout=15, auth=False)  # Auth is when profile is private
         if r.status_code == 404:
             return None
-        user: UserType = r.json()["data"]["user"]
-        return user
+        for user_dict in r.json()["users"]:
+            user: UserType = user_dict["user"]
+            found_user = user["username"]
+            if found_user == username:
+                return user
+
+        raise ValueError(f"Couldn't find user {username}!")
+        # variables = {
+        #     "username": "thethiny",
+        #     "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": True,
+        #     "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": False,
+        #     "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": False,
+        # }
+        # string_vars = json.dumps(variables)
+        # url = PROFILE_INFO_GRAPH_API_DOCID.format(variables=string_vars)
+        # r = self._get_request(url, auth=False)  # Auth is when profile is private
+        # data = r.json()
+        
+        # return data["data"]["user"]
+
 
     def get_story_reels_data(self, reel_ids: Iterable[str]):
         url = STORY_API.format(ids_string='&reel_ids='.join(reel_ids))
@@ -158,6 +178,7 @@ class InstagramDownloader:
                     break
                 yield item
             ctr += 1
+            time.sleep(1)
             if done:
                 break
 
@@ -263,7 +284,7 @@ class InstagramDownloader:
             image = item["image_url"]
             video = item["video_url"]
             besties = item["besties_only"]
-            time = item["time"]
+            post_time = item["time"]
 
             image_ext = get_extension_from_url(image)
             video_ext = get_extension_from_url(video)
@@ -271,14 +292,15 @@ class InstagramDownloader:
             image_path, video_path = self._get_media_out_paths(default_path, besties, video, owner, False)
             os.makedirs(image_path, exist_ok=True)
 
+            download_state = True
             if video:
                 os.makedirs(video_path, exist_ok=True)
                 image_name = image_name + "_thumbnail"
                 video_file = os.path.join(video_path, f"{video_name}.{video_ext}")
-                download_item(video, video_file, time, desc=tqdm_desc.format("video"))
+                download_state = download_state and download_item(video, video_file, post_time, desc=tqdm_desc.format("video"))
 
             image_file = os.path.join(image_path, f"{image_name}.{image_ext}")
-            download_item(image, image_file, time, desc=tqdm_desc.format("image"))
+            download_state = download_state and download_item(image, image_file, post_time, desc=tqdm_desc.format("image"))
 
             tagged_users = item["tagged_users"]
             if tagged_users:
@@ -289,10 +311,13 @@ class InstagramDownloader:
                     tag_user = user_obj["username"] or mappings.get(str(user_obj["id"]))
                     im_copy, vd_copy = self._get_media_out_paths(default_path, besties, video, tag_user, True)
                     os.makedirs(im_copy, exist_ok=True)
-                    self._copy_item(image_file, os.path.join(im_copy, f"{image_name}.{image_ext}"), time)
+                    self._copy_item(image_file, os.path.join(im_copy, f"{image_name}.{image_ext}"), post_time)
                     if video:
                         os.makedirs(vd_copy, exist_ok=True)
-                        self._copy_item(video_file, os.path.join(vd_copy, f"{video_name}.{video_ext}"), time) # type: ignore
+                        self._copy_item(video_file, os.path.join(vd_copy, f"{video_name}.{video_ext}"), post_time) # type: ignore
+
+            if download_state:
+                time.sleep(1) # Only sleep if doesn't exist
 
         print()
 

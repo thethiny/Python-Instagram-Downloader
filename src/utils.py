@@ -76,7 +76,7 @@ def download_item(url: str, store_path: str, timestamp: int = 0, retry_count: in
         print("Already exists", store_path, end="\r")
         return False
 
-    with requests.get(url, stream=True) as context:
+    with requests.get(url, stream=True, timeout=10) as context:
         if context.status_code == 410:
             print("Cannot download", url, "for error 410")
             return False

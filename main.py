@@ -428,7 +428,7 @@ if __name__ == "__main__":
                     highlights_folder_full_path = os.path.join(
                         downloads_folder, username, highlights_folder
                     )
-                    print(f"Getting highlight {h_id} ({j+1}/{download_limit})")
+                    print(f"Getting highlight {h_id} ({j+1}/{download_limit}) ({i}/{len(highlights_ids)})")
                     instagram.download_list(
                         highlights_data[h_id]["reels"],
                         username_mappings,
@@ -493,6 +493,9 @@ if __name__ == "__main__":
                 profile_pic = hd_url
             else:
                 user = instagram.get_user_profile(username)
+                if user is None:
+                    print(f"User {username} is deleted or session expired!")
+                    continue
                 profile_pic = user.get("profile_pic_url_hd") or user.get("profile_pic_url") or sd_url
                 user_id = user.get("id")
             username_mappings[user_id] = username
